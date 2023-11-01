@@ -63,6 +63,7 @@ options = {
 	:dstDir => nil,
 	:output => ".",
 	:filter => nil,
+	:robustMissingFileSearch => true,
 	:verbose => false,
 	:numOfThreads => TaskManagerAsync.getNumberOfProcessor()
 }
@@ -113,14 +114,42 @@ sourceFiles = sourceFiles.select{ |aFilename| aFilename.match(options[:filter]) 
 targetFiles = FileUtil.getRegExpFilteredFilesMT2(options[:dstDir], nil)
 targetFiles = targetFiles.select{ |aFilename| aFilename.match(options[:filter]) } if options[:filter]
 
+diffTargetFiles={}
+missedFiles={}
 sourceFiles.each do |aSrcFile|
 	targetFilename = FileUtil.getRobustCommonPath(options[:srcDir], aSrcFile, options[:dstDir], targetFiles)
 	relativeSrcPath = aSrcFile.slice(options[:srcDir].length, aSrcFile.length)
 	outputFilename = "#{options[:output]}/#{relativeSrcPath.gsub("/", "-")}"
 	if FileTest.exist?(aSrcFile) && FileTest.exist?(targetFilename) then
 		puts "diff #{aSrcFile} #{targetFilename} > #{outputFilename}" if options[:verbose]
-		taskMan.addTask( ExecDiff.new( aSrcFile, targetFilename, outputFilename, options[:verbose]) )
+		diffTargetFiles[aSrcFile] = [aSrcFile, targetFilename, outputFilename]
+	else
+		puts "#{targetFilename} is #{FileTest.exist?(targetFilename) ? "found" : "not found"}"
+		missedFilename = FileUtil.getFilenameFromPath(targetFilename)
+		missedFiles[missedFilename] = "target"
 	end
+end
+
+targetFiles.each do |targetFilename|
+	aSrcFile = FileUtil.getRobustCommonPath(options[:dstDir], targetFilename, options[:srcDir], sourceFiles)
+	relativeSrcPath = targetFilename.slice(options[:dstDir].length, targetFilename.length)
+	outputFilename = "#{options[:output]}/#{relativeSrcPath.gsub("/", "-")}"
+	if FileTest.exist?(aSrcFile) && FileTest.exist?(targetFilename) then
+		puts "diff #{aSrcFile} #{targetFilename} > #{outputFilename}" if options[:verbose]
+		diffTargetFiles[aSrcFile] = [aSrcFile, targetFilename, outputFilename]
+	else
+		missedFilename = FileUtil.getFilenameFromPath(aSrcFile)
+		if !missedFiles.has_key?(missedFilename) || !options[:robustMissingFileSearch] then
+			missedFiles[missedFilename] = "source"
+			puts "#{aSrcFile} is #{FileTest.exist?(aSrcFile) ? "found" : "not found"}"
+		end
+	end
+end
+
+diffTargetFiles.each do |aSrcFile, targetOutputFiles|
+	targetFilename = targetOutputFiles[0]
+	outputFilename = targetOutputFiles[1]
+	taskMan.addTask( ExecDiff.new( aSrcFile, targetFilename, outputFilename, options[:verbose]) )
 end
 
 taskMan.executeAll()
