@@ -19,6 +19,7 @@ require_relative 'ExecUtil'
 require_relative 'FileUtil'
 require_relative 'TaskManager'
 require 'fileutils'
+require 'shellwords'
 
 class ExecDiff < TaskAsync
 	def initialize( srcFile, targetFile, outputFile, verbose=false )
@@ -30,10 +31,11 @@ class ExecDiff < TaskAsync
 	end
 
 	def execute
-		exec_cmd = "diff -u -E -Z -b -w -B -I -N #{@srcFile} #{@targetFile} > #{@outputFile}"
+		exec_cmd = "diff -u -E -b -w -B -I -N #{Shellwords.escape(@srcFile)} #{Shellwords.escape(@targetFile)}"
 		puts exec_cmd if @verbose
 
-		ExecUtil.execCmd(exec_cmd, FileUtil.getDirectoryFromPath(@outputFile), false)
+		results = ExecUtil.getExecResultEachLine(exec_cmd, FileUtil.getDirectoryFromPath(@outputFile), false)
+		FileUtil.writeFile(@outputFile, results)
 
 		_doneTask()
 	end
@@ -41,7 +43,7 @@ end
 
 class FileUtil
 	def self.getRobustCommonPath(srcBasePath, srcPath, dstBasePath, dstFiles)
-		relativeSrcPath = srcPath.slice(srcBasePath.length, srcPath.length)
+		relativeSrcPath = srcPath.slice(srcBasePath.length+1, srcPath.length)
 		result = "#{dstBasePath}/#{relativeSrcPath}"
 		if !FileTest.exist?(result) then
 			filename = FileUtil.getFilenameFromPath(relativeSrcPath)
@@ -55,6 +57,28 @@ class FileUtil
 		return result
 	end
 end
+
+class DiffUtil
+	def self.getDiffTargetAndMissedAndOutputFiles(sourceBasePath, sourceFiles, targetBasePath, targetFiles, outputPathBase, diffTargetFiles={}, missedFiles={}, isRobustMissingFileSearch=false)
+		sourceFiles.each do |aSrcFile|
+			targetFilename = FileUtil.getRobustCommonPath(sourceBasePath, aSrcFile, targetBasePath, targetFiles)
+			theTargetFilename = FileUtil.getFilenameFromPath(targetFilename)
+			relativeSrcPath = aSrcFile.slice(sourceBasePath.length+1, aSrcFile.length)
+			outputFilename = "#{outputPathBase}/#{relativeSrcPath.gsub("/", "-")}"
+			if FileTest.exist?(aSrcFile) && FileTest.exist?(targetFilename) then
+				diffTargetFiles[theTargetFilename] = [aSrcFile, targetFilename, outputFilename]
+			else
+				if !missedFiles.has_key?(theTargetFilename) || !isRobustMissingFileSearch then
+					if !FileTest.exist?(targetFilename) then
+						missedFiles[theTargetFilename] = targetFilename
+					end
+				end
+			end
+		end
+		return diffTargetFiles, missedFiles
+	end
+end
+
 
 
 #---- main --------------------------
@@ -114,41 +138,20 @@ sourceFiles = sourceFiles.select{ |aFilename| aFilename.match(options[:filter]) 
 targetFiles = FileUtil.getRegExpFilteredFilesMT2(options[:dstDir], nil)
 targetFiles = targetFiles.select{ |aFilename| aFilename.match(options[:filter]) } if options[:filter]
 
-diffTargetFiles={}
-missedFiles={}
-sourceFiles.each do |aSrcFile|
-	targetFilename = FileUtil.getRobustCommonPath(options[:srcDir], aSrcFile, options[:dstDir], targetFiles)
-	relativeSrcPath = aSrcFile.slice(options[:srcDir].length, aSrcFile.length)
-	outputFilename = "#{options[:output]}/#{relativeSrcPath.gsub("/", "-")}"
-	if FileTest.exist?(aSrcFile) && FileTest.exist?(targetFilename) then
-		puts "diff #{aSrcFile} #{targetFilename} > #{outputFilename}" if options[:verbose]
-		diffTargetFiles[aSrcFile] = [aSrcFile, targetFilename, outputFilename]
-	else
-		puts "#{targetFilename} is #{FileTest.exist?(targetFilename) ? "found" : "not found"}"
-		missedFilename = FileUtil.getFilenameFromPath(targetFilename)
-		missedFiles[missedFilename] = "target"
-	end
+diffTargetFiles = {}
+missedFiles = {}
+diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:srcDir], sourceFiles, options[:dstDir], targetFiles, options[:output], diffTargetFiles, missedFiles )
+diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:dstDir], targetFiles, options[:srcDir], sourceFiles, options[:output], diffTargetFiles, missedFiles, options[:robustMissingFileSearch] )
+
+missedFiles.each do |aMissedFilename, aMissedFilePath|
+	puts "#{aMissedFilePath} is not found"
 end
 
-targetFiles.each do |targetFilename|
-	aSrcFile = FileUtil.getRobustCommonPath(options[:dstDir], targetFilename, options[:srcDir], sourceFiles)
-	relativeSrcPath = targetFilename.slice(options[:dstDir].length, targetFilename.length)
-	outputFilename = "#{options[:output]}/#{relativeSrcPath.gsub("/", "-")}"
-	if FileTest.exist?(aSrcFile) && FileTest.exist?(targetFilename) then
-		puts "diff #{aSrcFile} #{targetFilename} > #{outputFilename}" if options[:verbose]
-		diffTargetFiles[aSrcFile] = [aSrcFile, targetFilename, outputFilename]
-	else
-		missedFilename = FileUtil.getFilenameFromPath(aSrcFile)
-		if !missedFiles.has_key?(missedFilename) || !options[:robustMissingFileSearch] then
-			missedFiles[missedFilename] = "source"
-			puts "#{aSrcFile} is #{FileTest.exist?(aSrcFile) ? "found" : "not found"}"
-		end
-	end
-end
-
-diffTargetFiles.each do |aSrcFile, targetOutputFiles|
-	targetFilename = targetOutputFiles[0]
-	outputFilename = targetOutputFiles[1]
+diffTargetFiles.each do |theFilename, targetOutputFiles|
+	aSrcFile = targetOutputFiles[0]
+	targetFilename = targetOutputFiles[1]
+	outputFilename = targetOutputFiles[2]
+	puts "diff #{aSrcFile} #{targetFilename} > #{outputFilename}" if options[:verbose]
 	taskMan.addTask( ExecDiff.new( aSrcFile, targetFilename, outputFilename, options[:verbose]) )
 end
 
