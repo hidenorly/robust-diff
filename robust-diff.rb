@@ -59,11 +59,11 @@ class FileUtil
 end
 
 class DiffUtil
-	def self.getDiffTargetAndMissedAndOutputFiles(sourceBasePath, sourceFiles, targetBasePath, targetFiles, outputPathBase, diffTargetFiles={}, missedFiles={}, isRobustMissingFileSearch=false)
+	def self.getDiffTargetAndMissedAndOutputFiles(sourceBasePath, sourceFiles, targetBasePath, targetFiles, outputPathBase, diffTargetFiles={}, missedFiles={}, isRobustMissingFileSearch=false, isUseSourceNameForOutput)
 		sourceFiles.each do |aSrcFile|
 			targetFilename = FileUtil.getRobustCommonPath(sourceBasePath, aSrcFile, targetBasePath, targetFiles)
 			theTargetFilename = FileUtil.getFilenameFromPath(targetFilename)
-			relativeSrcPath = aSrcFile.slice(sourceBasePath.length+1, aSrcFile.length)
+			relativeSrcPath = isUseSourceNameForOutput ? aSrcFile.slice(sourceBasePath.length+1, aSrcFile.length) : targetFilename.slice(targetBasePath.length+1, targetFilename.length)
 			outputFilename = "#{outputPathBase}/#{relativeSrcPath.gsub("/", "-")}"
 			if FileTest.exist?(aSrcFile) && FileTest.exist?(targetFilename) then
 				diffTargetFiles[theTargetFilename] = [aSrcFile, targetFilename, outputFilename]
@@ -86,6 +86,7 @@ options = {
 	:srcDir => ".",
 	:dstDir => nil,
 	:output => ".",
+	:useSourceNameForOutput => false,
 	:filter => nil,
 	:robustMissingFileSearch => true,
 	:verbose => false,
@@ -109,6 +110,10 @@ opt_parser = OptionParser.new do |opts|
 
 	opts.on("-o", "--output=", "Specify output path") do |output|
 		options[:output] = output
+	end
+
+	opts.on("-u", "--useSourceNameForOutput", "Specify if you want to output with the source file basis") do
+		options[:useSourceNameForOutput] = true
 	end
 
 	opts.on("-j", "--numOfThreads=", "Specify number of threads (default:#{options[:numOfThreads]})") do |numOfThreads|
@@ -140,8 +145,8 @@ targetFiles = targetFiles.select{ |aFilename| aFilename.match(options[:filter]) 
 
 diffTargetFiles = {}
 missedFiles = {}
-diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:srcDir], sourceFiles, options[:dstDir], targetFiles, options[:output], diffTargetFiles, missedFiles )
-diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:dstDir], targetFiles, options[:srcDir], sourceFiles, options[:output], diffTargetFiles, missedFiles, options[:robustMissingFileSearch] )
+diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:srcDir], sourceFiles, options[:dstDir], targetFiles, options[:output], diffTargetFiles, missedFiles, false, options[:useSourceNameForOutput])
+diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:dstDir], targetFiles, options[:srcDir], sourceFiles, options[:output], diffTargetFiles, missedFiles, options[:robustMissingFileSearch], !options[:useSourceNameForOutput] )
 
 missedFiles.each do |aMissedFilename, aMissedFilePath|
 	puts "#{aMissedFilePath} is not found"
