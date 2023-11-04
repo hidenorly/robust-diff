@@ -89,6 +89,7 @@ options = {
 	:useSourceNameForOutput => false,
 	:filter => nil,
 	:robustMissingFileSearch => true,
+	:outputNotFoundFiles => false,
 	:verbose => false,
 	:numOfThreads => TaskManagerAsync.getNumberOfProcessor()
 }
@@ -114,6 +115,10 @@ opt_parser = OptionParser.new do |opts|
 
 	opts.on("-u", "--useSourceNameForOutput", "Specify if you want to output with the source file basis") do
 		options[:useSourceNameForOutput] = true
+	end
+
+	opts.on("-m", "--outputNotFoundFiles", "Specify if you want to output not found files") do
+		options[:outputNotFoundFiles] = true
 	end
 
 	opts.on("-j", "--numOfThreads=", "Specify number of threads (default:#{options[:numOfThreads]})") do |numOfThreads|
@@ -148,8 +153,10 @@ missedFiles = {}
 diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:srcDir], sourceFiles, options[:dstDir], targetFiles, options[:output], diffTargetFiles, missedFiles, false, options[:useSourceNameForOutput])
 diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:dstDir], targetFiles, options[:srcDir], sourceFiles, options[:output], diffTargetFiles, missedFiles, options[:robustMissingFileSearch], !options[:useSourceNameForOutput] )
 
-missedFiles.each do |aMissedFilename, aMissedFilePath|
-	puts "#{aMissedFilePath} is not found"
+if options[:outputNotFoundFiles] || options[:verbose] then
+	missedFiles.each do |aMissedFilename, aMissedFilePath|
+		puts "#{aMissedFilePath} is not found"
+	end
 end
 
 diffTargetFiles.each do |theFilename, targetOutputFiles|
