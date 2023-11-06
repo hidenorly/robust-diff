@@ -59,14 +59,14 @@ class FileUtil
 end
 
 class DiffUtil
-	def self.getDiffTargetAndMissedAndOutputFiles(sourceBasePath, sourceFiles, targetBasePath, targetFiles, outputPathBase, diffTargetFiles={}, missedFiles={}, isRobustMissingFileSearch=false, isUseSourceNameForOutput)
+	def self.getDiffTargetAndMissedAndOutputFiles(sourceBasePath, sourceFiles, targetBasePath, targetFiles, outputPathBase, diffTargetFiles={}, missedFiles={}, isRobustMissingFileSearch=false, isUseSourceNameForOutput=false, isTargetAsSource=false)
 		sourceFiles.each do |aSrcFile|
 			targetFilename = FileUtil.getRobustCommonPath(sourceBasePath, aSrcFile, targetBasePath, targetFiles)
 			theTargetFilename = FileUtil.getFilenameFromPath(targetFilename)
 			relativeSrcPath = isUseSourceNameForOutput ? aSrcFile.slice(sourceBasePath.length+1, aSrcFile.length) : targetFilename.slice(targetBasePath.length+1, targetFilename.length)
 			outputFilename = "#{outputPathBase}/#{relativeSrcPath.gsub("/", "-")}"
 			if FileTest.exist?(aSrcFile) && FileTest.exist?(targetFilename) then
-				diffTargetFiles[theTargetFilename] = [aSrcFile, targetFilename, outputFilename]
+				diffTargetFiles[theTargetFilename] = !isTargetAsSource ? [aSrcFile, targetFilename, outputFilename] : [targetFilename, aSrcFile, outputFilename] if !diffTargetFiles.has_key?(theTargetFilename)
 			else
 				if !missedFiles.has_key?(theTargetFilename) || !isRobustMissingFileSearch then
 					if !FileTest.exist?(targetFilename) then
@@ -151,7 +151,7 @@ targetFiles = targetFiles.select{ |aFilename| aFilename.match(options[:filter]) 
 diffTargetFiles = {}
 missedFiles = {}
 diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:srcDir], sourceFiles, options[:dstDir], targetFiles, options[:output], diffTargetFiles, missedFiles, false, options[:useSourceNameForOutput])
-diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:dstDir], targetFiles, options[:srcDir], sourceFiles, options[:output], diffTargetFiles, missedFiles, options[:robustMissingFileSearch], !options[:useSourceNameForOutput] )
+diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:dstDir], targetFiles, options[:srcDir], sourceFiles, options[:output], diffTargetFiles, missedFiles, options[:robustMissingFileSearch], !options[:useSourceNameForOutput], true )
 
 if options[:outputNotFoundFiles] || options[:verbose] then
 	missedFiles.each do |aMissedFilename, aMissedFilePath|
