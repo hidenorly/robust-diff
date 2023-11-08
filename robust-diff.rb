@@ -48,7 +48,8 @@ class FileUtil
 		if !FileTest.exist?(result) then
 			filename = FileUtil.getFilenameFromPath(relativeSrcPath)
 			dstFiles.each do |aDstFile|
-				if aDstFile.include?(filename) then
+				if FileUtil.getFilenameFromPath(aDstFile) == filename then
+				#if aDstFile.include?(filename) then
 					result = aDstFile
 					break
 				end
@@ -154,12 +155,14 @@ diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( op
 diffTargetFiles, missedFiles = DiffUtil.getDiffTargetAndMissedAndOutputFiles( options[:dstDir], targetFiles, options[:srcDir], sourceFiles, options[:output], diffTargetFiles, missedFiles, options[:robustMissingFileSearch], !options[:useSourceNameForOutput], true )
 
 if options[:outputNotFoundFiles] || options[:verbose] then
+	missedFiles = missedFiles.sort{ |(k1,v1),(k2,v2)| (v1<=>v2) }
 	missedFiles.each do |aMissedFilename, aMissedFilePath|
 		puts "#{aMissedFilePath} is not found"
 	end
 end
 
 diffTargetFiles.each do |theFilename, targetOutputFiles|
+	puts targetOutputFiles if options[:verbose]
 	aSrcFile = targetOutputFiles[0]
 	targetFilename = targetOutputFiles[1]
 	outputFilename = targetOutputFiles[2]
