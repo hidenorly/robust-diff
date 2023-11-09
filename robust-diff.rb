@@ -22,16 +22,19 @@ require 'fileutils'
 require 'shellwords'
 
 class ExecDiff < TaskAsync
-	def initialize( srcFile, targetFile, outputFile, verbose=false )
+	def initialize( srcFile, targetFile, outputFile, ignoreRegExp, verbose=false )
 		super("ExecDiff::#{srcFile}:#{targetFile}")
 		@srcFile=srcFile
 		@targetFile=targetFile
 		@outputFile=outputFile
+		@ignoreRegExp = ignoreRegExp
 		@verbose = verbose
 	end
 
 	def execute
-		exec_cmd = "diff -u -E -b -w -B -I -N #{Shellwords.escape(@srcFile)} #{Shellwords.escape(@targetFile)}"
+		exec_cmd = "diff -u -E -b -w -B"
+		exec_cmd = "#{exec_cmd} -I '#{@ignoreRegExp}'" if @ignoreRegExp
+		exec_cmd = "#{exec_cmd} -N #{Shellwords.escape(@srcFile)} #{Shellwords.escape(@targetFile)}"
 		puts exec_cmd if @verbose
 
 		results = ExecUtil.getExecResultEachLine(exec_cmd, FileUtil.getDirectoryFromPath(@outputFile), false)
@@ -91,6 +94,7 @@ options = {
 	:filter => nil,
 	:robustMissingFileSearch => true,
 	:outputNotFoundFiles => false,
+	:ignoreRegExp => nil,
 	:verbose => false,
 	:numOfThreads => TaskManagerAsync.getNumberOfProcessor()
 }
@@ -108,6 +112,10 @@ opt_parser = OptionParser.new do |opts|
 
 	opts.on("-f", "--filter=", "Specify filename filter regexp") do |filter|
 		options[:filter] = filter
+	end
+
+	opts.on("-I", "--ignoreRegExp=", "Specify ignore regexp for diff -I") do |ignoreRegExp|
+		options[:ignoreRegExp] = ignoreRegExp
 	end
 
 	opts.on("-o", "--output=", "Specify output path") do |output|
@@ -162,12 +170,11 @@ if options[:outputNotFoundFiles] || options[:verbose] then
 end
 
 diffTargetFiles.each do |theFilename, targetOutputFiles|
-	puts targetOutputFiles if options[:verbose]
 	aSrcFile = targetOutputFiles[0]
 	targetFilename = targetOutputFiles[1]
 	outputFilename = targetOutputFiles[2]
 	puts "diff #{aSrcFile} #{targetFilename} > #{outputFilename}" if options[:verbose]
-	taskMan.addTask( ExecDiff.new( aSrcFile, targetFilename, outputFilename, options[:verbose]) )
+	taskMan.addTask( ExecDiff.new( aSrcFile, targetFilename, outputFilename, options[:ignoreRegExp], options[:verbose]) )
 end
 
 taskMan.executeAll()
