@@ -22,23 +22,28 @@ require 'fileutils'
 require 'shellwords'
 
 class ExecDiff < TaskAsync
-	def initialize( srcFile, targetFile, outputFile, ignoreRegExp, verbose=false )
+	def initialize( srcFile, targetFile, outputFile, useDiff, ignoreRegExp, verbose=false )
 		super("ExecDiff::#{srcFile}:#{targetFile}")
 		@srcFile=srcFile
 		@targetFile=targetFile
 		@outputFile=outputFile
+		@useDiff = useDiff
 		@ignoreRegExp = ignoreRegExp
 		@verbose = verbose
 	end
 
 	def execute
-		exec_cmd = "diff -u -E -b -w -B"
-		exec_cmd = "#{exec_cmd} -I '#{@ignoreRegExp}'" if @ignoreRegExp
-		exec_cmd = "#{exec_cmd} -N #{Shellwords.escape(@srcFile)} #{Shellwords.escape(@targetFile)}"
+		exec_cmd = "python3 cdiff.py -s -c"
+		if @useDiff then
+			exec_cmd = "diff -u -E -b -w -B"
+			exec_cmd = "#{exec_cmd} -I '#{@ignoreRegExp}'" if @ignoreRegExp
+			exec_cmd = "#{exec_cmd} -N"
+		end
+		exec_cmd = "#{exec_cmd} #{Shellwords.escape(@srcFile)} #{Shellwords.escape(@targetFile)}"
 		puts exec_cmd if @verbose
 
-		results = ExecUtil.getExecResultEachLine(exec_cmd, FileUtil.getDirectoryFromPath(@outputFile), false)
-		FileUtil.writeFile(@outputFile, results)
+		results = ExecUtil.getExecResultEachLine(exec_cmd, ".", false)
+		FileUtil.writeFile(@outputFile, results) if !results.empty?
 
 		_doneTask()
 	end
@@ -92,6 +97,7 @@ options = {
 	:output => ".",
 	:useSourceNameForOutput => false,
 	:filter => nil,
+	:useDiff => false,
 	:robustMissingFileSearch => true,
 	:outputNotFoundFiles => false,
 	:ignoreRegExp => nil,
@@ -116,6 +122,10 @@ opt_parser = OptionParser.new do |opts|
 
 	opts.on("-I", "--ignoreRegExp=", "Specify ignore regexp for diff -I") do |ignoreRegExp|
 		options[:ignoreRegExp] = ignoreRegExp
+	end
+
+	opts.on("-d", "--useDiff", "Specify if you want to use normal diff command") do
+		options[:useDiff] = true
 	end
 
 	opts.on("-o", "--output=", "Specify output path") do |output|
@@ -174,7 +184,7 @@ diffTargetFiles.each do |theFilename, targetOutputFiles|
 	targetFilename = targetOutputFiles[1]
 	outputFilename = targetOutputFiles[2]
 	puts "diff #{aSrcFile} #{targetFilename} > #{outputFilename}" if options[:verbose]
-	taskMan.addTask( ExecDiff.new( aSrcFile, targetFilename, outputFilename, options[:ignoreRegExp], options[:verbose]) )
+	taskMan.addTask( ExecDiff.new( aSrcFile, targetFilename, outputFilename, options[:useDiff], options[:ignoreRegExp], options[:verbose]) )
 end
 
 taskMan.executeAll()
