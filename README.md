@@ -50,3 +50,31 @@ $ ruby robust-diff.rb -s ./test/old -t ./test/new -o result -m
 ```
 $ ruby robust-diff.rb -s ./test/old -t ./test/new -o result --useDiff
 ```
+
+
+# About cdiff.py
+
+```
+python3 cdiff.py --help
+usage: cdiff.py [-h] [-s] [-c] [args ...]
+
+Parse command line options.
+
+positional arguments:
+  args                 file1 file2
+
+options:
+  -h, --help           show this help message and exit
+  -s, --strip          Ignore blank, etc.
+  -c, --ignoreComment  Ignore comments //, /* */
+ ```
+
+## Basic usage
+
+```
+$ python3 cdiff.py old/source.cpp new/source.cpp -c -s
+```
+
+Then diff with ignoring the comments and ignoring space, tab difference.
+
+
